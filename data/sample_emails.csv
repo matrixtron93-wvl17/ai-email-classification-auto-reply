@@ -1,0 +1,5 @@
+id,from_email,subject,body
+1,customer1@example.com,Need pricing for AI automation,Hi I would like to know your pricing for AI automation services.
+2,customer2@example.com,Unable to access my account,Hello I cannot log in to my account and need help.
+3,customer3@example.com,Very disappointed with your service,I have been waiting for days and nobody has resolved my issue.
+4,customer4@example.com,Question about your company,Hi I would like to know more about your company and services.
