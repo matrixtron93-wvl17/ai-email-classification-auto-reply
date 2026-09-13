@@ -1,31 +1,44 @@
-﻿# AI Email Classification & Auto-Reply
+﻿# AI Email Classification & Auto-Reply Automation
 
-An AI-powered email automation workflow built with n8n, AI, PostgreSQL, and Gmail.
+An AI-powered email automation workflow built with n8n, Google Gemini, PostgreSQL, Gmail, Python, and GitHub.
 
 ## Overview
 
-This project automatically receives incoming emails, classifies them using AI, generates an appropriate response, routes emails based on category, sends an automated reply, and stores the email record for tracking.
+This project automates the processing of incoming emails.
 
-## Categories
+The workflow:
 
-- Sales
-- Support
-- Complaint
-- General
+1. Retrieves email data
+2. Prepares and parses email content
+3. Classifies emails using AI
+4. Parses the AI classification result
+5. Routes emails by category
+6. Generates an appropriate AI reply
+7. Sends an automated email response
+8. Saves the email record to PostgreSQL
 
-## Technology Stack
+## Workflow Architecture
 
-- n8n Cloud
-- AI / LLM
-- PostgreSQL
-- Gmail
-- Python
-- Git & GitHub
-
-## Test Data
-
-The project includes four sample emails covering Sales, Support, Complaint, and General inquiries.
-
-## Project Status
-
-In Development
+```text
+Manual Trigger
+      ↓
+Get Email Data
+      ↓
+Prepare Email Data
+      ↓
+AI Email Classification
+      ↓
+Parse AI Result
+      ↓
+Route by Category
+   ↙      ↓       ↓       ↘
+Sales  Support  Complaint  General
+   └──────┴───────┴────────┘
+              ↓
+      AI Reply Generation
+              ↓
+      Send Auto-Reply
+              ↓
+      Save Email Record
+              ↓
+           Complete

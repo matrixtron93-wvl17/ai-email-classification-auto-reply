@@ -1,0 +1,540 @@
+{
+  "name": "AI Email Classification & Auto-Reply Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/matrixtron93-wvl17/ai-email-classification-auto-reply/main/data/sample_emails.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        64
+      ],
+      "id": "bef22c5b-63f0-426a-bbfe-1de7162a9f56",
+      "name": "Get Email Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const csv = $input.first().json.data;\n\nconst lines = csv.trim().split(/\\r?\\n/);\n\nconst headers = lines[0].split(',');\n\nconst emails = lines.slice(1).map(line => {\n  const values = line.split(',');\n\n  return {\n    id: values[0],\n    from_email: values[1],\n    subject: values[2],\n    body: values.slice(3).join(',')\n  };\n});\n\nreturn emails.map(email => ({\n  json: email\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        64
+      ],
+      "id": "644d2a0c-d9aa-40ac-852e-c910bc8e4219",
+      "name": "Prepare Email Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an AI email classification assistant.\n\nClassify the incoming email into exactly ONE of these categories:\n\nSales\nSupport\nComplaint\nGeneral\n\nRules:\n\n- Sales: pricing, quotation, products, services, purchasing, or sales inquiries.\n- Support: login problems, technical issues, account problems, or requests for assistance.\n- Complaint: dissatisfaction, unresolved issues, poor service, delays, or negative customer experiences.\n- General: general questions or inquiries that do not clearly belong to Sales, Support, or Complaint.\n\nReturn ONLY valid JSON in this exact format:\n\n{\n  \"category\": \"Sales\",\n  \"confidence\": 95,\n  \"reason\": \"Brief explanation\"\n}\n\nEmail:\n\nFrom: {{ $json.from_email }}\n\nSubject: {{ $json.subject }}\n\nBody:\n{{ $json.body }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        64
+      ],
+      "id": "0ea70889-0e51-4350-8b99-c6915608a483",
+      "name": "AI Email Classification",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "p58sHs9rhCniNJBi",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiItems = $input.all();\nconst originalItems = $('Prepare Email Data').all();\n\nreturn aiItems.map((item, index) => {\n  const original = originalItems[index].json;\n\n  const text = item.json.content?.parts?.[0]?.text || '';\n\n  const cleaned = text\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  let result;\n\n  try {\n    result = JSON.parse(cleaned);\n  } catch (error) {\n    result = {\n      category: 'General',\n      confidence: 0,\n      reason: 'Unable to parse AI classification result.'\n    };\n  }\n\n  return {\n    json: {\n      id: original.id,\n      from_email: original.from_email,\n      subject: original.subject,\n      body: original.body,\n      category: result.category,\n      confidence: Number(result.confidence) || 0,\n      reason: result.reason || ''\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        64
+      ],
+      "id": "9e973fde-31e7-4559-8103-4728342f8522",
+      "name": "Parse AI Result"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "{{ $json.category }}",
+                    "rightValue": "=Sales",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "127270fc-ec60-4b7b-9624-52a7bdabd53e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Sales"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "64421ac0-d7c4-4c03-8a29-5fc9c6ce99be",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Support",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Support"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "43c2fcce-e00d-4c59-8fa4-cd8d8eb25e29",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Complaint",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Complaint"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "97438023-dc2f-41e1-82c1-84416fb79a88",
+                    "leftValue": "",
+                    "rightValue": "General",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "General"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1248,
+        32
+      ],
+      "id": "2635c669-ac95-4494-b286-132514e9bcee",
+      "name": "Route by Category"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a professional customer service email assistant.\n\nWrite a helpful, professional, concise email reply based on the customer's email.\n\nThe email category is:\n{{ $json.category }}\n\nCategory guidance:\n\n- Sales: Answer the customer's sales or pricing inquiry and invite them to continue the conversation.\n- Support: Acknowledge the issue, provide helpful guidance, and ask for any necessary information.\n- Complaint: Acknowledge the customer's frustration, apologize professionally, and explain that the issue will be addressed.\n- General: Provide a friendly and informative response to the customer's general inquiry.\n\nCustomer email:\n\nFrom: {{ $json.from_email }}\n\nSubject:\n{{ $json.subject }}\n\nBody:\n{{ $json.body }}\n\nReturn ONLY the main email body.\n\nIMPORTANT:\n- Do NOT write \"Hello\", \"Hi\", \"Dear\", or any other greeting.\n- Do NOT write \"Best regards\", \"Sincerely\", or any signature.\n- Do NOT include the subject.\n- Do NOT include JSON.\n- Do NOT include Markdown.\n- Do NOT include placeholder text.\n- Do NOT include internal notes."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1472,
+        64
+      ],
+      "id": "71331ecb-a996-450d-a99a-77595a94baa0",
+      "name": "AI Reply Generation",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "p58sHs9rhCniNJBi",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Parse AI Result').item.json.from_email }}",
+        "subject": "=Re: {{ $('Parse AI Result').item.json.subject }}",
+        "message": "=<p>Hello,</p>\n\n<p>{{ $json.content.parts[0].text.replace(/\\n/g, '<br>') }}</p>\n\n<p>Best regards,<br>\nCustomer Support Team</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1824,
+        64
+      ],
+      "id": "86fed6f5-3175-43c9-a9c3-c2c270932c48",
+      "name": "Send Auto-Reply",
+      "webhookId": "fd2e32c2-66d2-4979-bf56-8275fa607d19",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EUV1JGMD6jkBVLvZ",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "email_records",
+          "mode": "list",
+          "cachedResultName": "email_records"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_id": "={{ $('Parse AI Result').item.json.id }}",
+            "from_email": "={{ $('Parse AI Result').item.json.from_email }}",
+            "subject": "={{ $('Parse AI Result').item.json.subject }}",
+            "body": "={{ $('Parse AI Result').item.json.body }}",
+            "category": "={{ $('Parse AI Result').item.json.category }}",
+            "confidence": "={{ $('Parse AI Result').item.json.confidence }}",
+            "reason": "={{ $('Parse AI Result').item.json.reason }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "from_email",
+              "displayName": "from_email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2048,
+        64
+      ],
+      "id": "d2f93ee3-0b22-45cb-9227-686f19f6b133",
+      "name": "Save Email Record",
+      "credentials": {
+        "postgres": {
+          "id": "PXmLyA1hJRgG0Jwt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        64
+      ],
+      "id": "0d9f57b1-f2bf-4412-a40e-1e85b5fe894a",
+      "name": "Complete"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        64
+      ],
+      "id": "a72f1210-a782-407e-a4b2-3ad21ef8a9d8",
+      "name": "Manual Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Email Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Data": {
+      "main": [
+        [
+          {
+            "node": "AI Email Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Email Classification": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Result": {
+      "main": [
+        [
+          {
+            "node": "Route by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Category": {
+      "main": [
+        [
+          {
+            "node": "AI Reply Generation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Reply Generation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Reply Generation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Reply Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Reply Generation": {
+      "main": [
+        [
+          {
+            "node": "Send Auto-Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Auto-Reply": {
+      "main": [
+        [
+          {
+            "node": "Save Email Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Email Record": {
+      "main": [
+        [
+          {
+            "node": "Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "63a89e36-10d3-418b-9011-03f8c47a0436",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b5c4c433300af6e6085cbda8f2ac6b56a06d6a231860c257d9d66c9227948b19"
+  },
+  "nodeGroups": [],
+  "id": "3cntk7zXEun54ukM",
+  "tags": []
+}
